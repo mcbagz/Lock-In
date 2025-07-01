@@ -1,0 +1,37 @@
+[
+    {
+        "name": "Notepad",
+        "path": "notepad.exe",
+        "icon": "📝",
+        "args": [],
+        "category": "Text Editors"
+    },
+    {
+        "name": "Calculator",
+        "path": "calc.exe", 
+        "icon": "🔢",
+        "args": [],
+        "category": "Utilities"
+    },
+    {
+        "name": "Visual Studio Code",
+        "path": "C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+        "icon": "💻",
+        "args": [],
+        "category": "Development"
+    },
+    {
+        "name": "Chrome",
+        "path": "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        "icon": "🌐",
+        "args": ["--new-window"],
+        "category": "Browsers"
+    },
+    {
+        "name": "PowerShell",
+        "path": "powershell.exe",
+        "icon": "💻",
+        "args": ["-NoExit"],
+        "category": "Development"
+    }
+] 

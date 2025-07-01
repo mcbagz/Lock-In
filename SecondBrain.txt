@@ -1,0 +1,26 @@
+FlowGenius:
+ - Desktop app (terminal is also fine)
+ - Building for yourself!
+ - Find a productivity tool you use or wish you had
+ - Any workflow: coding, notes, research, daily tasks,
+ - What frustrates me? What slows me down?
+   - Thinking about having so many tabs open.
+   - Something that lets me organize windows and see all the things I want to work on.
+   - Add a chat/research agent on the side.
+     - Quick/In depth
+     - Easily make big/small
+     - Writing as well ("Create a PRD" "Write a newsletter with sources")
+   - "Lock In"
+     - Is it possible to lock down the rest of my desktop?
+   - "Plan a session" "What tasks do you need to get done?"
+   - RAG (or retrieval) for chats and for documents?
+   - "What should I be doing?" AI assistant to help you/track progress.
+   - "Do you need this?" when opening a new window. Set it to task 1 or 2, eg.
+   - "Declutter"
+   - SpikyPOV: It's not worth saving every tab and window. I'm not going to go back to them.
+   - SPikyPOV: AI-assisted research will give me better responses and better resources without introducing distractions (rabbit holes to dive into).
+   - Make note? "Dive into this later"
+   - Create presets of windows? Coding = VS Code; Newsletter = Chrome (Substack) + Notepad.
+ - Try to leverage LangGraph and N8N
+ - Freedom App, locks out of apps
+ - Motion, keeps you on task, shifts tasks, etc

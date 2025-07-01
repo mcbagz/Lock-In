@@ -1,0 +1,177 @@
+LockIn Productivity App
+Version: 1.0
+
+1. Overview
+1.1 Purpose
+LockIn is a desktop productivity application designed to help users focus on tasks by managing a dedicated virtual desktop for task-specific apps and browser tabs, embodying the themes of Lock In (deep focus) and Declutter (automatic cleanup of task-related apps/tabs). The app provides an AI-powered research and chat assistant to replace Google searches and supports retrieval of past chat history to avoid redundant queries. Built with PySide for the UI, SQLite for data storage, and Chroma for vector-based chat retrieval, LockIn ensures a lightweight, cross-platform experience.
+
+1.2 Target Audience
+
+- Primary users: Individuals (e.g., developers, writers) who struggle with workspace clutter (e.g., leaving tabs/apps open for weeks) and need help focusing on tasks like coding or newsletter writing.
+- Platforms: Windows, macOS, Linux.
+
+1.3 Key Objectives
+
+- Create a virtual desktop to manage task-specific apps and browser tabs with user-defined presets.
+- Automatically close all task-related apps/tabs when a task is complete (Declutter).
+- Provide a movable app manager and AI assistant that remain visible within the virtual desktop (Lock In).
+- Offer an AI chat/research assistant to replace Google, with Quick and In-Depth modes and retrieval of past chats.
+- Support offline functionality for AI responses and chat retrieval.
+
+2. Features and Requirements
+2.1 UI Layout
+The app operates within a dedicated virtual desktop, controlling all apps/tabs opened for a task. The interface consists of three main components:
+
+- App Manager Window: A movable, always-visible window (left side by default) listing the Active Task and its associated apps/tabs.
+    - Displays the current task and its preset apps/tabs (e.g., “VS Code,” “Chrome: GitHub”).
+    - Each app/tab is clickable to open it in the virtual desktop’s workspace.
+    - All listed apps/tabs are open (running) but may be minimized if not displayed in the workspace.
+- AI Assistant Window: A movable, always-visible, resizable window (right side by default) for chat/research.
+    - Contains an input field, buttons to toggle Quick/In-Depth modes, and a “Find Similar Chats” button for retrieval.
+    - Displays AI responses and retrieved chat history.
+- Virtual Desktop Workspace: The main area where task-specific apps/tabs are displayed.
+    - Supports two view modes:
+        - Single-Window View: One app/tab fills the workspace. Clicking an app/tab in the App Manager opens it here.
+        - Dual-Window View: Two apps/tabs displayed vertically (one on top, one on bottom). Users drag apps/tabs from the App Manager to either window to open them.
+    - Closing a window in the workspace minimizes the app/tab (returns to App Manager list) without closing it.
+    - All apps/tabs in the App Manager remain open (minimized if not in the workspace) until the task is marked complete.
+    - The App Manager and AI Assistant windows are always on top within the virtual desktop but can be moved by the user.
+
+2.2 Core Features
+2.2.1 Virtual Desktop and Presets
+
+- Description: The app creates a virtual desktop for each task, managing apps and browser tabs defined by user-created presets.
+- Requirements:
+    - Users define presets via a “Create Preset” interface, selecting apps (e.g., VS Code, Notepad) and browser tabs (e.g., Chrome: GitHub).
+    - No default presets; all presets are user-defined.
+    - Presets are stored in SQLite (presets table: id, name, apps_tabs (JSON list of app paths/URLs)).
+    - Selecting a preset starts a session, opening a new virtual desktop with all associated apps/tabs.
+    - App Manager window shows the current task’s preset apps/tabs.
+    - Apps/tabs remain open (minimized if not in workspace) until the task is marked complete.
+    - A “Complete Task” button closes all associated apps/tabs and the virtual desktop (Declutter).
+- Tab Control:
+    - Manage browser tabs for major browsers (Chrome, Firefox prioritized; support multiple browsers if feasible).
+    - Use browser extensions (e.g., Chrome WebExtensions API) or automation (pyautogui) for tab opening/closing.
+- “Do You Need This?” Prompt:
+    - When a new app/tab is opened outside the preset within the virtual desktop, prompt: “Is this related to the current task?” with options:
+        - Assign to current task (adds to preset).
+        - Save as a note (“Dive Into This Later”).
+        - Ignore (no action).
+
+2.2.2 Virtual Desktop
+
+- Description: A dedicated virtual desktop isolates task-related apps/tabs, with movable App Manager and AI Assistant windows always visible.
+- Requirements:
+    - Create a new virtual desktop for each task session, separate from the user’s main desktop.
+    - Only task-related apps/tabs (from presets or added via prompt) open in the virtual desktop.
+    - App Manager and AI Assistant windows are always on top, movable within the virtual desktop, and persist across workspace view modes.
+    - Users can switch to other desktops (e.g., main desktop) but the virtual desktop remains isolated.
+    - Closing the virtual desktop (via “Complete Task”) closes all associated apps/tabs.
+
+2.2.3 AI Chat/Research Assistant
+
+- Description: Replaces Google searches with a movable, always-visible AI window for research and queries, minimizing tangents.
+- Requirements:
+    - Modes:
+        - Quick: Short, direct answers (e.g., “Python list comprehension syntax?”).
+        - In-Depth: Detailed responses with curated sources (e.g., “Explain SQLite transactions”).
+    - UI:
+        - Movable, resizable window with input field, “Quick” and “In-Depth” buttons, and “Find Similar Chats” button (always visible).
+    - Implementation:
+        - Use xAI API [(https://x.ai/api)](https://x.ai/api) or local model (e.g., LLaMA) for responses.
+        - Cache responses in SQLite for offline mode.
+    - Offline Mode:
+        - Use cached responses from SQLite when no internet is available.
+        - Support Quick mode and chat retrieval offline; In-Depth mode may be limited.
+
+2.2.4 Retrieval-Augmented Generation (RAG)
+
+- Description: Retrieve past chat history to avoid redundant queries.
+- Requirements:
+    - Scope: Limited to chat history (queries and responses).
+    - Storage: SQLite (chat_history table: id, query, response, mode, timestamp).
+    - Retrieval: Chroma vector database with sentence-transformers/all-MiniLM-L6-v2 for similarity search.
+    - Functionality: Users query past chats (e.g., “Show chats about SQLite setup”).
+    - Triggered via “Find Similar Chats” button or explicit query (e.g., “Similar to XYZ”).
+    - Results displayed in AI Assistant window.
+
+2.2.5 “Dive Into This Later” Notes
+
+- Description: Save links, ideas, or tabs for later review.
+- Requirements:
+    - Accessible via “Do You Need This?” prompt or manual input in the AI Assistant window.
+    - Stored in SQLite (notes table: id, content, tags, created_at).
+    - Viewable in the AI Assistant window but not included in RAG retrieval.
+    - Support tags (e.g., “Research,” “Newsletter”) for organization.
+
+2.3 Technical Requirements
+
+- Tech Stack:
+    - UI: PySide (Qt for Python).
+        - Movable App Manager and AI Assistant windows (QDockWidget or QWidget, always on top).
+        - Virtual desktop workspace with single/dual-window views (QSplitter).
+    - Storage:
+        - SQLite: Store presets, notes, and chat history.
+        - Chroma: Vector database for RAG (chat history retrieval).
+    - App/Tab Control:
+        - Apps: Use pygetwindow or pyautogui for opening/minimizing/closing.
+        - Tabs: Use browser extensions (Chrome WebExtensions API, Firefox equivalent) or pyautogui for cross-browser support.
+    - AI: xAI API [(https://x.ai/api)](https://x.ai/api) or local model (e.g., LLaMA).
+- State Machine (AI Features):
+    - Use PyTransitions to manage AI chat/research behavior.
+    - States: Idle, QuickQuery, InDepthQuery, Retrieval, Offline, Error.
+    - Transitions:
+        - Idle to QuickQuery/InDepthQuery: User submits query with mode.
+        - Idle/QuickQuery/InDepthQuery to Retrieval: User clicks “Find Similar Chats.”
+        - Any to Offline: No internet detected, use cached responses.
+        - Any to Error: Query/retrieval fails, show error message.
+        - Any to Idle: Query/retrieval complete, save response.
+- Offline Mode:
+    - Cache AI responses and chat history in SQLite.
+    - Support Quick mode and Retrieval; limit In-Depth mode if API-dependent.
+- Virtual Desktop:
+    - Use OS APIs (e.g., Windows Virtual Desktop API, libwnck on Linux, CGWindow on macOS) to create and manage virtual desktops.
+    - Ensure App Manager and AI Assistant windows are pinned to the task’s virtual desktop.
+
+2.4 User Experience Flow
+
+1. Launch App:
+    - Opens in the user’s main desktop with a dashboard to select/create presets.
+2. Start Session:
+    - Select a user-defined preset or manually choose apps/tabs, creating a new virtual desktop.
+    - App Manager and AI Assistant windows appear, movable and always visible.
+    - Apps/tabs open in the virtual desktop and are listed in the App Manager.
+3. Work:
+    - Single-Window View: Click an app/tab in App Manager to open it in the workspace.
+    - Dual-Window View: Drag apps/tabs to top/bottom window.
+    - Closing a workspace window minimizes the app/tab to App Manager.
+    - New apps/tabs trigger “Do You Need This?” prompt.
+    - AI Assistant handles Quick/In-Depth queries or chat retrieval.
+4. Finish:
+    - Click “Complete Task” to close all preset apps/tabs and the virtual desktop (Declutter).
+    - Save notes or chat history as needed.
+5. Retrieve:
+    - Use AI Assistant’s “Find Similar Chats” to query past chats.
+
+4. MVP Scope
+
+- Virtual Desktop: Create task-specific virtual desktop with App Manager and AI Assistant windows.
+- App/Tab Organizer: User-defined presets, App Manager window, single/dual-window workspace, auto-close on task completion.
+- AI Assistant: Quick/In-Depth modes, “Find Similar Chats” button.
+- RAG: SQLite/Chroma for chat history retrieval.
+- Notes: “Dive Into This Later” functionality.
+- Prioritized Browsers: Chrome
+- Prioritized Apps: VS Code, Notepad, Chrome.
+
+5. Implementation Notes
+
+- UI Layout:
+    - App Manager: Movable window (left by default), lists apps/tabs.
+    - AI Assistant: Movable, resizable window (right by default), with input field, Quick/In-Depth buttons, “Find Similar Chats.”
+    - Workspace: Single or dual vertical windows, supports drag-and-drop from App Manager.
+- Virtual Desktop:
+    - Isolate task apps/tabs; ensure App Manager and AI Assistant are always on top.
+    - Close virtual desktop on task completion.
+- Chroma Setup:
+    - Use sentence-transformers/all-MiniLM-L6-v2 for embedding chat history.
+    - Index on app startup; update after each chat response.

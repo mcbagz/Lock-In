@@ -1,0 +1,63 @@
+{
+    "applications": [
+        {
+            "name": "Notepad",
+            "path": "notepad.exe",
+            "category": "Text Editors",
+            "icon": "",
+            "args": []
+        },
+        {
+            "name": "Calculator",
+            "path": "calc.exe",
+            "category": "Utilities",
+            "icon": "",
+            "args": []
+        },
+        {
+            "name": "Paint",
+            "path": "mspaint.exe",
+            "category": "Graphics",
+            "icon": "",
+            "args": []
+        },
+        {
+            "name": "Task Manager",
+            "path": "taskmgr.exe",
+            "category": "System",
+            "icon": "",
+            "args": []
+        },
+        {
+            "name": "Command Prompt",
+            "path": "cmd.exe",
+            "category": "System",
+            "icon": "",
+            "args": []
+        },
+        {
+            "name": "PowerShell",
+            "path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "category": "System",
+            "icon": "",
+            "args": ["-NoExit"]
+        },
+        {
+            "name": "PowerShell Core",
+            "path": "pwsh.exe",
+            "category": "System",
+            "icon": "",
+            "args": []
+        }
+    ],
+    "categories": [
+        "Text Editors",
+        "Web Browsers",
+        "Development",
+        "Graphics",
+        "Utilities",
+        "Games",
+        "System",
+        "User Added"
+    ]
+} 

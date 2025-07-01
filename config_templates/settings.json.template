@@ -1,0 +1,31 @@
+{
+    "window_settings": {
+        "header_height": 50,
+        "app_manager_width": 350,
+        "ai_chat_width": 400,
+        "always_on_top": true
+    },
+    "virtual_desktop": {
+        "auto_create": true,
+        "restore_desktop_icons": true,
+        "cleanup_on_exit": true
+    },
+    "ai_settings": {
+        "default_model": "gpt-4",
+        "max_conversation_history": 50,
+        "auto_save_conversations": true,
+        "default_preset": "general"
+    },
+    "app_management": {
+        "auto_close_managed_apps": true,
+        "minimize_timeout": 5000,
+        "window_detection_interval": 2000
+    },
+    "ui_theme": {
+        "background_color": "#2d2d2d",
+        "text_color": "#ffffff",
+        "accent_color": "#4d6d4d",
+        "transparency": 200
+    },
+    "first_run": true
+} 

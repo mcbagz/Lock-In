@@ -1,0 +1,53 @@
+{
+    "presets": {
+        "Coding": {
+            "apps": [
+                {
+                    "args": [],
+                    "icon": "\ud83d\udcbb",
+                    "name": "PowerShell",
+                    "path": "powershell.exe"
+                },
+                {
+                    "args": [],
+                    "icon": "\ud83d\udcdd",
+                    "name": "Notepad",
+                    "path": "notepad.exe"
+                }
+            ],
+            "browser_tabs": {
+                "chrome": [
+                    "https://github.com",
+                    "https://stackoverflow.com"
+                ],
+                "edge": [
+                    "https://docs.microsoft.com"
+                ]
+            },
+            "created_at": "2025-07-01T14:15:01.419786",
+            "description": "Development environment setup",
+            "last_used": "2025-07-01T19:02:48.867614",
+            "name": "Coding"
+        },
+        "Writing": {
+            "name": "Writing",
+            "description": "Writing and documentation setup",
+            "apps": [
+                {
+                    "name": "Notepad",
+                    "path": "notepad.exe",
+                    "icon": "\ud83d\udcdd",
+                    "args": []
+                }
+            ],
+            "browser_tabs": {
+                "chrome": [
+                    "https://docs.google.com",
+                    "https://grammarly.com"
+                ]
+            },
+            "created_at": "2025-07-01T14:15:01.419786",
+            "last_used": null
+        }
+    }
+}

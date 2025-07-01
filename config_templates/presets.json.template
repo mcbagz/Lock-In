@@ -1,0 +1,60 @@
+{
+    "Development Work": {
+        "name": "Development Work",
+        "description": "Full development environment setup",
+        "apps": [
+            {
+                "name": "Visual Studio Code",
+                "path": "C:\\Users\\%USERNAME%\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+                "args": []
+            },
+            {
+                "name": "PowerShell",
+                "path": "powershell.exe",
+                "args": ["-NoExit"]
+            }
+        ],
+        "browser_tabs": {
+            "chrome": [
+                "https://github.com",
+                "https://stackoverflow.com",
+                "https://docs.python.org"
+            ]
+        },
+        "created_at": "2024-01-01T00:00:00Z",
+        "last_used": null
+    },
+    "Writing Session": {
+        "name": "Writing Session", 
+        "description": "Distraction-free writing environment",
+        "apps": [
+            {
+                "name": "Notepad",
+                "path": "notepad.exe",
+                "args": []
+            }
+        ],
+        "browser_tabs": {
+            "chrome": [
+                "https://docs.google.com",
+                "https://grammarly.com"
+            ]
+        },
+        "created_at": "2024-01-01T00:00:00Z",
+        "last_used": null
+    },
+    "Research Mode": {
+        "name": "Research Mode",
+        "description": "Browser-focused research environment",
+        "apps": [],
+        "browser_tabs": {
+            "chrome": [
+                "https://scholar.google.com",
+                "https://wikipedia.org",
+                "https://reddit.com"
+            ]
+        },
+        "created_at": "2024-01-01T00:00:00Z", 
+        "last_used": null
+    }
+} 

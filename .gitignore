@@ -1,0 +1,74 @@
+# ============================================================================
+# LockIn - Sensitive Data & Build Artifacts
+# ============================================================================
+
+# SENSITIVE DATA - NEVER COMMIT THESE!
+config/                     # Contains API keys, chat history, settings
+*.db                        # Database files
+*.sqlite3                   # SQLite databases
+*.enc                       # Encrypted files
+api_keys.txt               # API key files
+chroma_db/                 # Vector database
+ai_data.db                 # AI conversation data
+
+# ============================================================================
+# Build Artifacts (PyInstaller)
+# ============================================================================
+build/                     # PyInstaller build folder
+dist/                      # PyInstaller distribution folder
+*.spec                     # PyInstaller spec files (auto-generated)
+__pycache__/              # Python cache
+*.pyc                     # Compiled Python files
+*.pyo                     # Optimized Python files
+*.pyd                     # Python extension modules
+
+# ============================================================================
+# Development & IDE Files
+# ============================================================================
+.vscode/                  # VSCode settings
+.idea/                    # PyCharm settings
+*.swp                     # Vim swap files
+*.swo                     # Vim swap files
+.DS_Store                 # macOS system files
+Thumbs.db                 # Windows thumbnails
+desktop.ini               # Windows folder settings
+
+# ============================================================================
+# Logs & Temporary Files
+# ============================================================================
+*.log                     # Log files
+logs/                     # Log directories
+temp/                     # Temporary files
+tmp/                      # Temporary files
+*.tmp                     # Temporary files
+*.temp                    # Temporary files
+
+# ============================================================================
+# Python Virtual Environment
+# ============================================================================
+venv/                     # Virtual environment
+env/                      # Virtual environment
+.env                      # Environment variables
+.venv/                    # Virtual environment
+
+# ============================================================================
+# Testing & Coverage
+# ============================================================================
+.pytest_cache/            # Pytest cache
+.coverage                 # Coverage reports
+htmlcov/                  # Coverage HTML reports
+.tox/                     # Tox testing
+
+# ============================================================================
+# Package Distribution
+# ============================================================================
+*.egg-info/               # Package metadata
+.eggs/                    # Setuptools eggs
+
+# ============================================================================
+# User-specific files that shouldn't be shared
+# ============================================================================
+personal_notes.txt        # Personal notes
+test_data/                # Test data
+screenshots/              # Screenshots
+user_configs/             # User-specific configurations 
