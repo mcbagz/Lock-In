@@ -3,7 +3,7 @@
 # ============================================================================
 
 # SENSITIVE DATA - NEVER COMMIT THESE!
-config/                     # Contains API keys, chat history, settings
+config                      # Contains API keys, chat history, settings
 *.db                        # Database files
 *.sqlite3                   # SQLite databases
 *.enc                       # Encrypted files
@@ -14,7 +14,7 @@ ai_data.db                 # AI conversation data
 # ============================================================================
 # Build Artifacts (PyInstaller)
 # ============================================================================
-build/                     # PyInstaller build folder
+build                     # PyInstaller build folder
 dist/                      # PyInstaller distribution folder
 *.spec                     # PyInstaller spec files (auto-generated)
 __pycache__/              # Python cache

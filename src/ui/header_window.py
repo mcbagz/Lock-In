@@ -114,7 +114,7 @@ class HeaderWindow(QWidget):
         
         # Minimize all button
         minimize_all_btn = QPushButton("📉 Minimize All")
-        minimize_all_btn.setToolTip("Minimize all managed applications")
+        minimize_all_btn.setToolTip("Minimize all windows on virtual desktop")
         minimize_all_btn.clicked.connect(self.minimize_all_apps)
         layout.addWidget(minimize_all_btn)
         
@@ -176,11 +176,11 @@ class HeaderWindow(QWidget):
             print(f"Error updating header status: {e}")
     
     def minimize_all_apps(self):
-        """Minimize all managed applications"""
+        """Minimize ALL windows on the virtual desktop"""
         try:
-            managed_apps = self.process_manager.get_managed_apps()
-            for app_id in managed_apps:
-                self.process_manager.minimize_application(app_id)
+            # Use the new method to minimize ALL windows on virtual desktop
+            minimized_count = self.process_manager.minimize_all_virtual_desktop_windows()
+            print(f"Minimized {minimized_count} windows on virtual desktop")
         except Exception as e:
             print(f"Error minimizing applications: {e}")
     

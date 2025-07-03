@@ -147,10 +147,16 @@ class ConfigManager:
                     "description": "Development environment setup",
                     "apps": [
                         {
+                            "name": "VS Code",
+                            "path": "code.exe",
+                            "icon": "💻",
+                            "args": []
+                        },
+                        {
                             "name": "PowerShell",
                             "path": "powershell.exe",
                             "icon": "💻",
-                            "args": []
+                            "args": ["-NoExit"]
                         },
                         {
                             "name": "Notepad",
@@ -160,8 +166,8 @@ class ConfigManager:
                         }
                     ],
                     "browser_tabs": {
-                        "chrome": ["https://github.com", "https://stackoverflow.com"],
-                        "edge": ["https://docs.microsoft.com"]
+                        "chrome": ["https://github.com"],
+                        "edge": []
                     },
                     "created_at": datetime.now().isoformat(),
                     "last_used": None

@@ -92,8 +92,8 @@ class AIEmbeddingsManager:
             print(f"Error updating conversation summary: {e}")
             return False
     
-    def search_similar_conversations(self, query: str, n_results: int = 5, min_similarity: float = 0.5) -> List[Dict[str, Any]]:
-        """Search for conversations similar to the query"""
+    def search_similar_conversations(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """Search for conversations similar to the query - returns top N most similar regardless of absolute similarity"""
         try:
             # Query the collection
             results = self.collection.query(
@@ -109,16 +109,22 @@ class AIEmbeddingsManager:
                 for i in range(len(results['ids'][0])):
                     # Calculate similarity score (ChromaDB uses distance, lower is more similar)
                     distance = results['distances'][0][i]
-                    similarity = max(0, 1 - distance)  # Convert distance to similarity
+                    # Convert distance to similarity percentage (0-1 range)
+                    # For cosine distance, typical range is 0-2, but we'll normalize it
+                    similarity = max(0, min(1, 1 - (distance / 2)))  # Normalize to 0-1 range
+                    similarity_percentage = round(similarity * 100, 1)  # Convert to percentage
                     
-                    if similarity >= min_similarity:
-                        similar_conversations.append({
-                            "conversation_id": results['ids'][0][i],
-                            "summary": results['documents'][0][i],
-                            "metadata": results['metadatas'][0][i],
-                            "similarity": similarity,
-                            "distance": distance
-                        })
+                    similar_conversations.append({
+                        "conversation_id": results['ids'][0][i],
+                        "summary": results['documents'][0][i],
+                        "metadata": results['metadatas'][0][i],
+                        "similarity": similarity,
+                        "similarity_percentage": similarity_percentage,
+                        "distance": distance
+                    })
+            
+            # Sort by similarity (highest first) to ensure best matches come first
+            similar_conversations.sort(key=lambda x: x['similarity'], reverse=True)
             
             return similar_conversations
             

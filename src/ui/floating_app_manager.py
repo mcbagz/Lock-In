@@ -6,12 +6,62 @@ Manages applications in a floating, always-on-top window
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                                QLabel, QScrollArea, QFrame, QListWidget, 
                                QListWidgetItem, QComboBox, QMessageBox, QInputDialog,
-                               QTextEdit, QDialog, QDialogButtonBox, QFormLayout)
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QPalette, QColor, QIcon
+                               QTextEdit, QDialog, QDialogButtonBox, QFormLayout,
+                               QGridLayout)
+from PySide6.QtCore import Qt, QTimer, Signal, QSize
+from PySide6.QtGui import QFont, QPalette, QColor, QIcon, QCursor
 import os
 import time
+import win32gui
 from typing import List
+from utils.system_app_scanner import SystemAppScanner
+from .app_search_widget import AppSearchWidget
+
+
+class AppButton(QPushButton):
+    """Custom uniform button for app display in grid"""
+    def __init__(self, app_name, status_text, app_data, manager, parent=None):
+        super().__init__(parent)
+        self.app_data = app_data
+        self.app_name = app_name
+        self.status_text = status_text
+        self.manager = manager  # Store reference to FloatingAppManager
+        
+        # Set uniform size for all buttons
+        self.setFixedSize(140, 70)  # Fixed size for consistency
+        
+        # Set button content
+        self.setText(f"📱 {app_name}\n{status_text}")
+        
+        # Apply styling
+        self.setStyleSheet("""
+            QPushButton {
+                background-color: #3d3d3d;
+                border: 1px solid #555;
+                border-radius: 5px;
+                padding: 8px;
+                color: white;
+                font-size: 10px;
+                text-align: center;
+                white-space: normal;
+                word-wrap: break-word;
+            }
+            QPushButton:hover {
+                background-color: #4d4d4d;
+                border: 1px solid #666;
+            }
+            QPushButton:pressed {
+                background-color: #2d2d2d;
+                border: 1px solid #444;
+            }
+        """)
+        
+        # Connect click event
+        self.clicked.connect(self.on_clicked)
+        
+    def on_clicked(self):
+        """Handle button click - focus the app"""
+        self.manager.focus_app_by_data(self.app_data)
 
 
 class PresetSaveDialog(QDialog):
@@ -60,9 +110,17 @@ class FloatingAppManager(QWidget):
         self.virtual_desktop = virtual_desktop
         self.process_manager = process_manager
         
+        # Initialize system app scanner
+        self.system_scanner = SystemAppScanner(config.config_dir)
+        
         self.is_minimized = False
         self.normal_height = 550  # Reduced height since we removed control buttons
         self.allow_close = False  # Flag to allow closing during shutdown
+        self.saved_size = None  # Store window size before minimizing
+        
+        # Initialize app data storage for grid layout
+        self.last_apps_data = []
+        self.last_item_count = 0
         
         self.setup_window()
         self.setup_ui()
@@ -81,16 +139,20 @@ class FloatingAppManager(QWidget):
         
         self.setGeometry(x, y, width, height)
         
+        # Make window resizable with reasonable bounds
+        self.setMinimumSize(250, 300)  # Minimum usable size
+        self.setMaximumSize(600, screen_geometry.height() - 100)  # Don't exceed screen height
+        
         # Window flags to make it always on top and prevent closing
         self.setWindowFlags(
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool |  # Don't show in taskbar
-            Qt.WindowType.FramelessWindowHint
+            Qt.WindowType.FramelessWindowHint  # Custom title bar
         )
         
         # Custom styling
         self.setStyleSheet("""
-            QWidget {
+                        QWidget {
                 background-color: #2d2d2d;
                 color: white;
                 border: none;
@@ -103,12 +165,7 @@ class FloatingAppManager(QWidget):
                 max-height: 30px;
             }
             
-            QLabel#titleLabel {
-                color: white;
-                font-weight: bold;
-                font-size: 12px;
-                padding-left: 10px;
-            }
+ 
             
             QPushButton {
                 background-color: #4d4d4d;
@@ -128,18 +185,7 @@ class FloatingAppManager(QWidget):
                 background-color: #3d3d3d;
             }
             
-            QPushButton#minimizeButton {
-                background-color: #5d5d3d;
-                max-width: 25px;
-                min-width: 25px;
-                max-height: 25px;
-                min-height: 25px;
-                border-radius: 12px;
-            }
-            
-            QPushButton#minimizeButton:hover {
-                background-color: #7d7d5d;
-            }
+
             
             QPushButton#savePresetButton {
                 background-color: #3d5d3d;
@@ -182,6 +228,7 @@ class FloatingAppManager(QWidget):
                 border-radius: 5px;
                 padding: 5px;
                 color: white;
+                spacing: 0px;
             }
             
             QListWidget::item {
@@ -189,7 +236,12 @@ class FloatingAppManager(QWidget):
                 border: 1px solid #555;
                 border-radius: 3px;
                 padding: 8px;
-                margin: 2px;
+                margin: 0px;
+                min-height: 50px;
+                text-align: center;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             
             QListWidget::item:selected {
@@ -206,6 +258,10 @@ class FloatingAppManager(QWidget):
                 border: none;
                 background-color: #2d2d2d;
             }
+            
+            QWidget#appsContainer {
+                background-color: #2d2d2d;
+            }
         """)
         
     def setup_ui(self):
@@ -214,7 +270,7 @@ class FloatingAppManager(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Title bar
+        # Custom title bar for consistent design
         title_bar = self.create_title_bar()
         layout.addWidget(title_bar)
         
@@ -260,24 +316,16 @@ class FloatingAppManager(QWidget):
         preset_layout.addLayout(preset_buttons_layout)
         content_layout.addWidget(preset_frame)
         
-        # Quick launch section
+        # Quick launch section with searchable interface  
         quick_launch_frame = QFrame()
-        quick_launch_frame.setStyleSheet("QFrame { border: 1px solid #555; border-radius: 5px; padding: 5px; }")
+        quick_launch_frame.setStyleSheet("QFrame { border: 1px solid #555; border-radius: 5px; padding: 8px; }")
         quick_layout = QVBoxLayout(quick_launch_frame)
+        quick_layout.setContentsMargins(5, 5, 5, 5)
         
-        quick_label = QLabel("🚀 Quick Launch")
-        quick_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-        quick_layout.addWidget(quick_label)
-        
-        # App selection dropdown
-        self.app_dropdown = QComboBox()
-        self.populate_app_dropdown()
-        quick_layout.addWidget(self.app_dropdown)
-        
-        # Launch button
-        launch_btn = QPushButton("▶ Launch Application")
-        launch_btn.clicked.connect(self.launch_selected_app)
-        quick_layout.addWidget(launch_btn)
+        # App search widget - minimal design
+        self.app_search_widget = AppSearchWidget(self.config, self.system_scanner)
+        self.app_search_widget.app_launch_requested.connect(self.launch_app_from_search)
+        quick_layout.addWidget(self.app_search_widget)
         
         content_layout.addWidget(quick_launch_frame)
         
@@ -286,38 +334,95 @@ class FloatingAppManager(QWidget):
         running_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         content_layout.addWidget(running_label)
         
-        # Running apps list
-        self.apps_list = QListWidget()
-        self.apps_list.setMaximumHeight(250)  # Increased height since no buttons below
-        self.apps_list.itemClicked.connect(self.focus_clicked_app)  # Add click-to-focus
-        content_layout.addWidget(self.apps_list)
+        # Running apps container with clean grid layout
+        self.apps_scroll = QScrollArea()
+        self.apps_scroll.setWidgetResizable(True)
+        self.apps_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.apps_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.apps_scroll.setMinimumHeight(150)
         
-        # Add spacer to fill remaining space
-        content_layout.addStretch()
+        # Container widget for the grid
+        self.apps_container = QWidget()
+        self.apps_container.setObjectName("appsContainer")
+        self.apps_grid_layout = QGridLayout(self.apps_container)
+        self.apps_grid_layout.setSpacing(5)  # 5px spacing between items
+        self.apps_grid_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Set the container as the scroll area's widget
+        self.apps_scroll.setWidget(self.apps_container)
+        
+        # Add scroll area to main layout
+        content_layout.addWidget(self.apps_scroll, 1)  # Give it stretch factor of 1 to expand
         
         layout.addWidget(self.content_widget)
         
+        # Add resize grip for bottom-right corner
+        self.resize_grip = QWidget()
+        self.resize_grip.setFixedSize(15, 15)
+        self.resize_grip.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, 
+                    stop:0 transparent, stop:0.5 #666, stop:1 #999);
+                border: none;
+            }
+        """)
+        self.resize_grip.setCursor(Qt.CursorShape.SizeFDiagCursor)
+        
+        # Position resize grip at bottom-right
+        self.resize_grip.setParent(self)
+        self.resize_grip.show()
+        
+        # Install event filters for resize functionality
+        self.resize_grip.mousePressEvent = self.start_resize
+        self.resize_grip.mouseMoveEvent = self.perform_resize
+        
     def create_title_bar(self):
-        """Create custom title bar with minimize button"""
+        """Create custom title bar with consistent design"""
         title_bar = QWidget()
         title_bar.setObjectName("titleBar")
         title_bar.setFixedHeight(30)
         
         layout = QHBoxLayout(title_bar)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(10, 0, 10, 0)
         
         # Title label
         title_label = QLabel("📱 App Manager")
         title_label.setObjectName("titleLabel")
+        title_label.setStyleSheet("""
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        """)
         layout.addWidget(title_label)
         
         layout.addStretch()
         
-        # Minimize button
-        minimize_btn = QPushButton("−")
+        # Minimize button - consistent with app design
+        minimize_btn = QPushButton("─")
         minimize_btn.setObjectName("minimizeButton")
         minimize_btn.clicked.connect(self.toggle_minimize)
-        minimize_btn.setToolTip("Minimize to title bar")
+        minimize_btn.setToolTip("Minimize (Ctrl+T)")
+        minimize_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4d4d4d;
+                border: 1px solid #666;
+                border-radius: 12px;
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                max-width: 25px;
+                min-width: 25px;
+                max-height: 25px;
+                min-height: 25px;
+            }
+            QPushButton:hover {
+                background-color: #5d5d5d;
+                border: 1px solid #777;
+            }
+            QPushButton:pressed {
+                background-color: #3d3d3d;
+            }
+        """)
         layout.addWidget(minimize_btn)
         
         # Enable dragging by title bar
@@ -337,102 +442,106 @@ class FloatingAppManager(QWidget):
             delta = event.globalPosition().toPoint() - self.drag_start_position
             self.move(self.pos() + delta)
             self.drag_start_position = event.globalPosition().toPoint()
+    
+    def resizeEvent(self, event):
+        """Handle resize events to maintain resizable functionality"""
+        super().resizeEvent(event)
+        # Position resize grip at bottom-right corner
+        if hasattr(self, 'resize_grip'):
+            self.resize_grip.move(self.width() - 15, self.height() - 15)
             
-    def toggle_minimize(self):
-        """Toggle minimize state"""
-        if self.is_minimized:
-            # Restore
-            self.setFixedHeight(self.normal_height)
-            self.content_widget.show()
-            self.is_minimized = False
-        else:
-            # Minimize to title bar only
-            self.normal_height = self.height()
-            self.setFixedHeight(30)  # Title bar height
-            self.content_widget.hide()
-            self.is_minimized = True
-            
-    def setup_timer(self):
-        """Setup timer for updating app list"""
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.update_apps_list)
-        self.update_timer.start(2000)  # Update every 2 seconds
+        # Update grid layout when window is resized
+        if hasattr(self, 'apps_grid_layout'):
+            # Delay the grid update to allow widget to properly resize
+            QTimer.singleShot(50, self.update_apps_grid_layout)
+    
+    def update_apps_grid_layout(self):
+        """Update the grid layout after window resize"""
+        # This will be called after resize to recalculate the grid
+        # We'll refresh the grid with the current apps
+        if hasattr(self, 'last_apps_data'):
+            self.populate_apps_grid(self.last_apps_data)
+    
+    def populate_apps_grid(self, apps_data):
+        """Populate the grid with uniform app buttons"""
+        # Store the data for resize events
+        self.last_apps_data = apps_data
         
-    def populate_app_dropdown(self):
-        """Populate the app dropdown with available applications"""
-        try:
-            apps_list = self.config.get_applications()  # This returns a list
-            self.app_dropdown.clear()
+        # Clear existing buttons first
+        self.clear_apps_grid()
+        
+        if not apps_data:
+            # Show "No apps running" message
+            no_apps_label = QLabel("No applications running")
+            no_apps_label.setStyleSheet("color: #888; font-style: italic; padding: 20px;")
+            no_apps_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.apps_grid_layout.addWidget(no_apps_label, 0, 0)
+            return
+        
+        # Calculate optimal number of columns based on scroll area width
+        scroll_width = self.apps_scroll.width()
+        button_width = 140  # Fixed button width
+        spacing = 5  # Grid spacing
+        margin = 10  # Container margins
+        
+        # Account for potential scrollbar
+        available_width = scroll_width - margin - 20  # 20px for potential scrollbar
+        
+        # Calculate how many columns can fit
+        columns = max(1, (available_width + spacing) // (button_width + spacing))
+        columns = min(columns, 4)  # Maximum 4 columns for usability
+        
+        print(f"Grid layout: {columns} columns, available width: {available_width}px")
+        
+        # Create buttons in grid
+        for i, app_info in enumerate(apps_data):
+            row = i // columns
+            col = i % columns
             
-            # Handle list format from config
-            if isinstance(apps_list, list):
-                for app_info in apps_list:
-                    app_name = app_info.get('name', 'Unknown')
-                    icon = app_info.get('icon', '📱')
-                    if not icon:  # If icon is empty string, use default
-                        icon = '📱'
-                    self.app_dropdown.addItem(f"{icon} {app_name}", app_info)
-            else:
-                # Handle dictionary format (legacy)
-                for app_name, app_info in apps_list.items():
-                    icon = app_info.get('icon', '📱')
-                    if not icon:
-                        icon = '📱'
-                    self.app_dropdown.addItem(f"{icon} {app_name}", app_info)
-                
-        except Exception as e:
-            print(f"Error populating app dropdown: {e}")
-            # Add fallback items
-            self.app_dropdown.addItem("📝 Notepad", {"name": "Notepad", "path": "notepad.exe"})
-            self.app_dropdown.addItem("🔢 Calculator", {"name": "Calculator", "path": "calc.exe"})
+            # Truncate long names for better display
+            display_name = app_info['name']
+            if len(display_name) > 20:
+                display_name = display_name[:17] + "..."
             
-    def launch_selected_app(self):
-        """Launch the selected application"""
-        try:
-            current_data = self.app_dropdown.currentData()
-            if current_data:
-                app_path = current_data.get('path')
-                app_name = current_data.get('name', 'Unknown App')
-                
-                if self.process_manager.launch_application(app_path, app_name):
-                    print(f"Successfully launched: {app_name}")
-                else:
-                    QMessageBox.warning(self, "Launch Failed", f"Failed to launch {app_name}")
-                    
-        except Exception as e:
-            print(f"Error launching application: {e}")
-            QMessageBox.critical(self, "Error", f"Error launching application: {e}")
+            # Truncate status for better display
+            status = app_info['status']
+            if len(status) > 25:
+                status = status[:22] + "..."
             
-    def update_apps_list(self):
-        """Update the running applications list"""
-        try:
-            self.apps_list.clear()
-            managed_apps = self.process_manager.get_managed_apps()
+            button = AppButton(
+                app_name=display_name,
+                status_text=status,
+                app_data=app_info['data'],
+                manager=self, # Pass the manager instance
+                parent=self.apps_container
+            )
             
-            for app_id, app in managed_apps.items():
-                try:
-                    status = "Running"
-                    if hasattr(app, 'process') and app.process.is_running():
-                        cpu_percent = app.process.cpu_percent()
-                        memory_mb = app.process.memory_info().rss / 1024 / 1024
-                        status = f"CPU: {cpu_percent:.1f}% | RAM: {memory_mb:.1f}MB"
-                except:
-                    status = "Unknown"
-                
-                item_text = f"📱 {app.name}\n   {status}"
-                item = QListWidgetItem(item_text)
-                item.setData(Qt.ItemDataRole.UserRole, app_id)
-                self.apps_list.addItem(item)
-                
-        except Exception as e:
-            print(f"Error updating apps list: {e}")
+            self.apps_grid_layout.addWidget(button, row, col)
+        
+        # Add stretch to push buttons to top-left
+        self.apps_grid_layout.setRowStretch(len(apps_data) // columns + 1, 1)
+        
+        # Update item count for tracking
+        self.last_item_count = len(apps_data)
+    
+    def focus_app_by_data(self, app_data):
+        """Focus application by data (unified method for both managed apps and windows)"""
+        if app_data.startswith("window_"):
+            # This is a virtual desktop window, not a managed app
+            window_hwnd = int(app_data.replace("window_", ""))
+            success = self.process_manager.focus_window_by_handle(window_hwnd)
+            print(f"Focusing window {window_hwnd}: {'✅ Success' if success else '❌ Failed'}")
+        else:
+            # This is a managed application
+            app_id = app_data
+            success = self.process_manager.focus_application(app_id)
+            print(f"Focusing app {app_id}: {'✅ Success' if success else '❌ Failed'}")
             
     def focus_clicked_app(self, item):
-        """Focus the clicked application"""
-        app_id = item.data(Qt.ItemDataRole.UserRole)
-        self.process_manager.focus_application(app_id)
-        print(f"Focusing app: {app_id}")
-            
+        """Legacy method for compatibility - redirect to new method"""
+        data = item.data(Qt.ItemDataRole.UserRole)
+        self.focus_app_by_data(data)
+        
     def allow_closing(self):
         """Allow the window to be closed (called during shutdown)"""
         self.allow_close = True
@@ -443,14 +552,184 @@ class FloatingAppManager(QWidget):
             # Allow closing during shutdown
             event.accept()
         else:
-            # Prevent user from closing manually
+            # Prevent user from closing manually - just minimize instead
             event.ignore()
-            QMessageBox.information(
-                self, 
-                "Cannot Close", 
-                "The App Manager cannot be closed while LockIn is running.\nUse the header to close LockIn."
-            )
+            if not self.is_minimized:
+                self.toggle_minimize()
+            print("ℹ️ App Manager minimized instead of closed (use Ctrl+T to toggle)")
+    
+    def start_resize(self, event):
+        """Start window resizing from grip"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.resize_start_pos = event.globalPosition().toPoint()
+            self.resize_start_size = self.size()
+            
+    def perform_resize(self, event):
+        """Perform window resizing"""
+        if hasattr(self, 'resize_start_pos') and hasattr(self, 'resize_start_size'):
+            delta = event.globalPosition().toPoint() - self.resize_start_pos
+            new_width = max(self.minimumWidth(), self.resize_start_size.width() + delta.x())
+            new_height = max(self.minimumHeight(), self.resize_start_size.height() + delta.y())
+            self.resize(new_width, new_height)
+        
 
+    def toggle_minimize(self):
+        """Toggle minimize state - keep visual presence when minimized"""
+        if self.is_minimized:
+            # Restore window
+            # First remove height constraints
+            self.setMinimumHeight(300)
+            self.setMaximumHeight(self.screen().geometry().height() - 100)
+            
+            if self.saved_size:
+                self.resize(self.saved_size)
+            else:
+                # Fallback to normal height if no saved size
+                self.resize(self.width(), self.normal_height)
+            self.content_widget.show()
+            self.is_minimized = False
+            
+            # Focus search input when restoring (with delay to ensure window is ready)
+            if hasattr(self, 'app_search_widget') and self.app_search_widget:
+                QTimer.singleShot(100, self._focus_search_input)
+        else:
+            # Save current size BEFORE any modifications
+            self.saved_size = self.size()
+            print(f"App Manager: Saving size {self.saved_size.width()}x{self.saved_size.height()}")
+            
+            # Hide content and set fixed height for title bar only
+            self.content_widget.hide()
+            self.setFixedHeight(30)  # Just title bar height
+            self.is_minimized = True
+            
+    def toggle_minimize_with_focus(self):
+        """Toggle minimize state and focus search input when restoring"""
+        if self.is_minimized:
+            # Restore and focus search input
+            self.toggle_minimize()
+            # Extra delay for keyboard shortcut triggered focus
+            if hasattr(self, 'app_search_widget') and self.app_search_widget:
+                QTimer.singleShot(200, self._focus_search_input)
+        else:
+            # Just minimize
+            self.toggle_minimize()
+    
+    def _focus_search_input(self):
+        """Aggressively focus the search input"""
+        if hasattr(self, 'app_search_widget') and self.app_search_widget:
+            # Make sure window is active first
+            self.activateWindow()
+            self.raise_()
+            # Then focus the input
+            self.app_search_widget.search_input.setFocus(Qt.FocusReason.ShortcutFocusReason)
+            # Force the widget to be focused
+            self.app_search_widget.search_input.activateWindow()
+            print("Focused search input")
+            
+    def setup_timer(self):
+        """Setup timer for updating app list"""
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.update_apps_list)
+        self.update_timer.start(2000)  # Update every 2 seconds
+        
+    def launch_app_from_search(self, app_path: str, app_name: str, args: list):
+        """Launch application from search widget"""
+        try:
+            if self.process_manager.launch_application(app_path, app_name, args):
+                print(f"Successfully launched: {app_name}")
+            else:
+                QMessageBox.warning(self, "Launch Failed", f"Failed to launch {app_name}")
+        except Exception as e:
+            print(f"Error launching application: {e}")
+            QMessageBox.critical(self, "Error", f"Error launching application: {e}")
+        
+
+            
+    def update_apps_list(self):
+        """Update the running applications list with clean grid layout"""
+        try:
+            # Clear existing buttons
+            self.clear_apps_grid()
+            
+            apps_data = []
+            
+            # Track which windows are already handled by managed apps
+            handled_windows = set()
+            
+            # First, add managed applications that have valid, focusable windows
+            managed_apps = self.process_manager.get_managed_apps()
+            
+            for app_id, app in managed_apps.items():
+                try:
+                    # Check if the managed app has a valid, focusable window
+                    has_valid_window = False
+                    
+                    # Check main window
+                    if app.main_window and win32gui.IsWindow(app.main_window):
+                        has_valid_window = True
+                        handled_windows.add(app.main_window)
+                    
+                    # Check other windows
+                    for window_hwnd in app.windows:
+                        if window_hwnd != app.main_window and win32gui.IsWindow(window_hwnd):
+                            has_valid_window = True
+                            handled_windows.add(window_hwnd)
+                    
+                    # Only show managed apps that have valid windows
+                    if has_valid_window:
+                        # Get app status with consistent formatting
+                        status = "Running"
+                        try:
+                            if hasattr(app, 'process') and app.process.is_running():
+                                cpu_percent = app.process.cpu_percent()
+                                memory_mb = app.process.memory_info().rss / 1024 / 1024
+                                status = f"CPU: {cpu_percent:.1f}%\nRAM: {memory_mb:.0f}MB"
+                        except:
+                            status = "Managed App"
+                        
+                        apps_data.append({
+                            'name': app.name,
+                            'status': status,
+                            'data': app_id,
+                            'type': 'managed'
+                        })
+                        
+                except Exception as e:
+                    print(f"Error processing managed app {app_id}: {e}")
+                    continue
+            
+            # Second, add virtual desktop windows that aren't already handled by managed apps
+            if self.virtual_desktop and self.virtual_desktop.real_virtual_desktop:
+                all_desktop_windows = self.process_manager._get_all_windows_on_virtual_desktop()
+                
+                for hwnd in all_desktop_windows:
+                    if hwnd not in handled_windows:  # Not already covered by managed apps
+                        try:
+                            title = win32gui.GetWindowText(hwnd)
+                            if title and len(title) > 0:
+                                apps_data.append({
+                                    'name': title,
+                                    'status': "Desktop App",
+                                    'data': f"window_{hwnd}",
+                                    'type': 'window'
+                                })
+                        except Exception as e:
+                            print(f"Error processing virtual desktop window {hwnd}: {e}")
+                            continue
+            
+            # Create grid layout with uniform buttons
+            self.populate_apps_grid(apps_data)
+                
+        except Exception as e:
+            print(f"Error updating apps list: {e}")
+    
+    def clear_apps_grid(self):
+        """Clear all widgets from the apps grid"""
+        while self.apps_grid_layout.count():
+            item = self.apps_grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+    
     def populate_preset_dropdown(self):
         """Populate the preset dropdown with available presets"""
         try:
@@ -562,28 +841,11 @@ class FloatingAppManager(QWidget):
         try:
             preset_data = self.preset_dropdown.currentData()
             if not preset_data:
-                QMessageBox.information(self, "No Preset", "Please select a preset to load.")
+                print("No preset selected")
                 return
             
             preset_name = preset_data.get('name', 'Unknown')
-            
-            # Confirm loading
-            reply = QMessageBox.question(
-                self,
-                "Load Preset",
-                f"Load '{preset_name}' preset?\nThis will launch all applications in the preset.",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if reply != QMessageBox.StandardButton.Yes:
-                return
-            
-            # Show loading feedback
-            QMessageBox.information(
-                self, 
-                "Loading Preset", 
-                f"Loading '{preset_name}' preset...\nApplications will launch in sequence."
-            )
+            print(f"Loading preset: {preset_name}")
             
             # Launch apps from preset
             apps = preset_data.get('apps', [])
@@ -633,19 +895,11 @@ class FloatingAppManager(QWidget):
             preset_data['last_used'] = time.time()
             self.config.save_preset(preset_name, preset_data)
             
-            # Show completion message
+            # Silent completion - just log results
             if success_count == total_count:
-                QMessageBox.information(
-                    self,
-                    "Preset Loaded",
-                    f"Successfully loaded '{preset_name}' preset!\n{success_count} applications launched."
-                )
+                print(f"✅ Successfully loaded '{preset_name}' preset! {success_count} applications launched.")
             else:
-                QMessageBox.warning(
-                    self,
-                    "Preset Partially Loaded",
-                    f"Loaded '{preset_name}' preset with some issues.\n{success_count}/{total_count} applications launched successfully."
-                )
+                print(f"⚠️ Loaded '{preset_name}' preset with some issues. {success_count}/{total_count} applications launched successfully.")
                 
         except Exception as e:
             print(f"Error loading preset: {e}")

@@ -118,11 +118,11 @@ class AIClient:
             if max_tokens:
                 params["max_tokens"] = max_tokens
             
-            # Special handling for o1 models
-            if model.startswith("o1"):
-                # o1 models don't support temperature or system messages
+            # Special handling for o3 models
+            if model.startswith("o3"):
+                # o3 models don't support temperature or system messages
                 params.pop("temperature", None)
-                # Remove system messages for o1 models
+                # Remove system messages for o3 models
                 params["messages"] = [msg for msg in messages if msg.get("role") != "system"]
             
             response = client.chat.completions.create(**params)
@@ -158,8 +158,8 @@ class AIClient:
                 "stream": True
             }
             
-            # Special handling for o1 models
-            if model.startswith("o1"):
+            # Special handling for o3 models
+            if model.startswith("o3"):
                 params.pop("temperature", None)
                 params["messages"] = [msg for msg in messages if msg.get("role") != "system"]
             
@@ -225,8 +225,8 @@ class AIClient:
             # Build messages for API
             api_messages = []
             
-            # Add system message if not o1 model
-            if not preset["model"].startswith("o1"):
+            # Add system message if not o3 model
+            if not preset["model"].startswith("o3"):
                 api_messages.append({
                     "role": "system",
                     "content": preset["system_prompt"]
@@ -341,6 +341,138 @@ class AIClient:
         """Continue an existing conversation with a new message"""
         return self.process_conversation_message(conversation_id, message)
     
+    def process_collaborative_message(self, conversation_id: str, user_message: str, 
+                                    current_text: str, preset_name: str = "Default") -> Optional[Dict[str, Any]]:
+        """Process a user message in collaborative mode with text context"""
+        try:
+            # Get preset configuration
+            preset = self.database.get_preset(preset_name)
+            if not preset:
+                preset = self.database.get_preset("Default")
+                if not preset:
+                    raise ValueError("No default preset available")
+            
+            # Get conversation history
+            conversation_messages = self.database.get_conversation_messages(conversation_id)
+            
+            # Build enhanced system prompt for collaborative mode
+            collaborative_system_prompt = f"""
+{preset["system_prompt"]}
+
+You are now in collaborative text editing mode. The user has a text document that you can both read and edit. 
+
+Current text document content:
+---
+{current_text}
+---
+
+IMPORTANT INSTRUCTIONS:
+1. You can respond with a message, edit the text, or both
+2. If you want to edit the text, include your response in this JSON format:
+   {{"message": "Your explanation here", "text_edit": "The complete new text content", "edit_description": "Brief description of what you changed"}}
+3. If you only want to respond without editing, respond normally
+4. Always be helpful and explain your changes clearly
+5. The user can see the current text and will see your edits immediately
+6. Focus on being collaborative - ask questions, suggest improvements, and work together
+
+The user's message might be about the text content, a request to edit it, or a general question.
+"""
+            
+            # Build messages for API
+            api_messages = []
+            
+            # Add system message if not o3 model
+            if not preset["model"].startswith("o3"):
+                api_messages.append({
+                    "role": "system",
+                    "content": collaborative_system_prompt
+                })
+            
+            # Add recent conversation history (last 10 messages to keep context manageable)
+            recent_messages = conversation_messages[-10:] if len(conversation_messages) > 10 else conversation_messages
+            for msg in recent_messages:
+                api_messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+            
+            # Add current user message with text context
+            user_message_with_context = f"""
+User message: {user_message}
+
+Current text document:
+---
+{current_text}
+---
+"""
+            
+            api_messages.append({
+                "role": "user",
+                "content": user_message_with_context
+            })
+            
+            # Get response from OpenAI
+            response = self.chat_completion(
+                messages=api_messages,
+                model=preset["model"],
+                temperature=preset.get("settings", {}).get("temperature", 0.7)
+            )
+            
+            if not response:
+                return None
+            
+            # Parse response to check for text edits
+            ai_response = response["content"]
+            text_edit = None
+            edit_description = None
+            
+            # Try to parse JSON response for text edits
+            try:
+                import json
+                # Look for JSON in the response
+                if ai_response.strip().startswith('{') and ai_response.strip().endswith('}'):
+                    parsed = json.loads(ai_response)
+                    if "text_edit" in parsed:
+                        text_edit = parsed["text_edit"]
+                        edit_description = parsed.get("edit_description", "AI edit")
+                        ai_response = parsed.get("message", "I've made some changes to the text.")
+                elif "```json" in ai_response:
+                    # Extract JSON from markdown code block
+                    json_start = ai_response.find("```json") + 7
+                    json_end = ai_response.find("```", json_start)
+                    if json_end > json_start:
+                        json_str = ai_response[json_start:json_end].strip()
+                        parsed = json.loads(json_str)
+                        if "text_edit" in parsed:
+                            text_edit = parsed["text_edit"]
+                            edit_description = parsed.get("edit_description", "AI edit")
+                            ai_response = parsed.get("message", "I've made some changes to the text.")
+            except json.JSONDecodeError:
+                # If JSON parsing fails, treat as regular message
+                pass
+            
+            # Store messages in database
+            self.database.add_message(conversation_id, "user", user_message)
+            self.database.add_message(
+                conversation_id, 
+                "assistant", 
+                ai_response, 
+                response["model"]
+            )
+            
+            return {
+                "response": ai_response,
+                "text_edit": text_edit,
+                "edit_description": edit_description,
+                "model_used": response["model"],
+                "usage": response["usage"],
+                "conversation_id": conversation_id
+            }
+            
+        except Exception as e:
+            print(f"Error processing collaborative message: {e}")
+            return None
+    
     def get_usage_stats(self) -> Dict[str, Any]:
         """Get API usage statistics"""
         # This would require tracking usage over time
@@ -364,7 +496,7 @@ def quick_chat(message: str, preset_name: str = "Default") -> Optional[str]:
         return None
     
     messages = []
-    if not preset["model"].startswith("o1"):
+    if not preset["model"].startswith("o3"):
         messages.append({
             "role": "system",
             "content": preset["system_prompt"]
